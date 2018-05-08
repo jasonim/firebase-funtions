@@ -37,43 +37,53 @@ exports.makeUppercase = functions.database.ref('/messages/{pushId}/original').on
     return event.data.ref.parent.child('uppercase').set(uppercase);
 });
 
+function updateReffered(admin, uid, level) {
+    return admin.database().ref(`users/${uid}/referredBy`)
+        .once('value').then(function (data) {
+            console.warn("data " + JSON.stringify(data) + " + begin");
+            if (!data || level > 3) {
+                return data
+            }
+            var referred_by_somebody = data.val();
+            console.log("referred " + referred_by_somebody);
+
+
+
+            if (referred_by_somebody) {
+                    var moneyRef = admin.database()
+                        .ref(`/users/${referred_by_somebody}/score`);
+
+                    return moneyRef.once('value').then(function (data) {
+                        console.log("user: " + JSON.stringify(data) + " dl by: " + referred_by_somebody + " level: " + level)
+
+                        if (data) {
+                            updateReffered(admin, referred_by_somebody, level + 1)
+                            moneyRef.set(data.val() + 1)
+                            return (data.val() || 0) + 1
+                           //  var scoreRef = admin.database()
+                           //      .ref(`/users/${referred_by_somebody}/score`);
+                           // return scoreRef.transaction(function (current_value) {
+                           //      console.log("score: " + current_value + " by " + referred_by_somebody)
+                           //
+                           //          updateReffered(admin, referred_by_somebody, level + 1)
+                           //
+                           //      return (current_value || 0) + 1
+                           //  });
+                        }
+
+                        return 1;
+
+                    });
+            }
+
+            console.log(" updateReffered end " + JSON.stringify(data))
+            return data;
+        });
+}
 
 exports.grantSignupReward = functions.database.ref('/users/{uid}/last_signin_at').onCreate((snap, context) => {
     var uid = context.params.uid;
     console.warn(" context: " + uid);
 
-    return admin.database().ref(`users/${uid}/referredBy`)
-        .once('value').then(function (data) {
-            console.warn("data " + JSON.stringify(data));
-            var referred_by_somebody = data.val();
-            console.log("referred " + referred_by_somebody);
-
-            if (referred_by_somebody) {
-                var moneyRef = admin.database()
-                    .ref(`/users/${referred_by_somebody}`);
-
-                moneyRef.transaction(function (current_value) {
-                    console.log("user: " + JSON.stringify(current_value))
-
-                    if (current_value) {
-                        var scoreRef = admin.database()
-                            .ref(`/users/${referred_by_somebody}/score`);
-                        return scoreRef.transaction(function (current_value) {
-                            return (current_value || 0) + 1
-                        });
-                    }
-
-                    return {score: 1};
-
-                });
-
-                // moneyRef.once('value').then(function (data) {
-                //    return moneyRef.set({
-                //
-                //    });
-                // });
-            }
-
-            return data;
-        });
+    return updateReffered(admin, uid, 0)
 });
